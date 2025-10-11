@@ -1,0 +1,1108 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+api/main.py
+cli_match.py
+config.py
+data/rentals_source.json
+matching_engine/build_indexes.py
+matching_engine/engine.py
+matching_engine/image_matcher.py
+matching_engine/init.py
+matching_engine/structured_matcher.py
+matching_engine/text_matcher.py
+precompute_rental_images.py
+README.md
+test_input.json
+tests/test_api.py
+tests/test_engine.py
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="api/main.py">
+from fastapi import FastAPI
+from pydantic import BaseModel
+from typing import List
+from matching_engine.engine import MatchingEngine
+
+app = FastAPI(title="Matching Engine AI Project")
+
+engine = MatchingEngine()  # load FAISS + metadata once
+
+class ListingModel(BaseModel):
+    id: int
+    url: str
+    title: str
+    desc: str
+    price: float
+    rooms: int
+    location: str
+    images: List[str]
+
+class RentalsSource(BaseModel):
+    sale_listings: List[ListingModel]
+
+@app.post("/match")
+def match_listings(data: RentalsSource):
+    results = []
+    for sale in data.sale_listings:
+        matches = engine.match_sale_to_rentals(sale.dict(), top_k=5)
+        results.append({
+            "sale_id": sale.id,
+            "sale_title": sale.title,
+            "matches": matches
+        })
+    return results
+</file>
+
+<file path="cli_match.py">
+import argparse
+from matching_engine.engine import MatchingEngine
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--title", type=str, default="")
+    parser.add_argument("--desc", type=str, default="")
+    parser.add_argument("--images", type=str, nargs="+", default=[])
+    parser.add_argument("--price", type=float, default=0)
+    parser.add_argument("--rooms", type=int, default=0)
+    parser.add_argument("--location", type=str, default="")
+    parser.add_argument("--top_k", type=int, default=5)
+    args = parser.parse_args()
+
+    sale_listing = {
+        "title": args.title,
+        "desc": args.desc,
+        "images": args.images,
+        "price": args.price,
+        "rooms": args.rooms,
+        "location": args.location,
+    }
+
+    engine = MatchingEngine()
+    results = engine.match_sale_to_rentals(sale_listing, top_k=args.top_k)
+
+    print("✅ Top matches:")
+    for i, r in enumerate(results):
+        print(f"{i+1}. {r['platform']} | {r['title']} | Final Score: {r['final_score']}")
+
+if __name__ == "__main__":
+    main()
+</file>
+
+<file path="config.py">
+# config.py - Add this file for easy tuning
+class MatchingConfig:
+    # Search parameters (tune these for speed vs accuracy)
+    TEXT_TOP_K = 20          # Reduced for speed
+    IMAGE_TOP_K = 20         # Reduced for speed  
+    FINAL_CANDIDATES = 30    # Reduced for speed
+    
+    # Scoring weights
+    TEXT_WEIGHT = 0.45
+    IMAGE_WEIGHT = 0.35
+    STRUCTURED_WEIGHT = 0.20
+    
+    # Performance settings
+    MAX_WORKERS = 4          # Adjust based on your CPU cores
+    IMAGE_TIMEOUT = 5        # Reduced timeout for image downloads
+    MAX_IMAGES_PER_LISTING = 2  # Limit images processed
+    
+    # For even faster results, use these aggressive settings:
+    @classmethod
+    def fast_mode(cls):
+        cls.TEXT_TOP_K = 10
+        cls.IMAGE_TOP_K = 10
+        cls.FINAL_CANDIDATES = 15
+        cls.IMAGE_WEIGHT = 0.2  # Reduce image weight since it's slower
+        cls.TEXT_WEIGHT = 0.6   # Increase text weight
+        cls.STRUCTURED_WEIGHT = 0.2
+</file>
+
+<file path="data/rentals_source.json">
+{
+  "sale_listings": [
+    {
+      "id": 1,
+      "url": "https://example.com/sale/1",
+      "title": "Luxury Villa in Tuscany",
+      "desc": "A beautiful villa in Florence with swimming pool and garden.",
+      "price": 2500000,
+      "rooms": 5,
+      "location": "Florence, Italy",
+      "images": [
+        "https://picsum.photos/200/300?random=1",
+        "https://picsum.photos/200/300?random=2"
+      ]
+    }
+  ],
+  "rental_listings": [
+    {
+      "id": 101,
+      "url": "https://example.com/rent/1",
+      "platform": "Airbnb",
+      "title": "Holiday Villa in Florence",
+      "desc": "Spacious rental villa with garden and pool in Florence.",
+      "price": 5000,
+      "rooms": 5,
+      "location": "Florence, Italy",
+      "images": [
+        "https://picsum.photos/200/300?random=3",
+        "https://picsum.photos/200/300?random=4"
+      ]
+    },
+    {
+      "id": 102,
+      "url": "https://example.com/rent/2",
+      "platform": "Booking",
+      "title": "Charming Tuscany House",
+      "desc": "Tuscan-style house with hills view and 4 rooms.",
+      "price": 4000,
+      "rooms": 4,
+      "location": "Tuscany, Italy",
+      "images": [
+        "https://picsum.photos/200/300?random=5",
+        "https://picsum.photos/200/300?random=6"
+      ]
+    }
+  ]
+}
+</file>
+
+<file path="matching_engine/build_indexes.py">
+# matching_engine/build_indexes.py (FIXED VERSION)
+import json
+import os
+from tqdm import tqdm
+import numpy as np
+import faiss
+from matching_engine.text_matcher import embed_text
+from matching_engine.image_matcher import embed_image_url
+
+DATA_IN = os.path.join("data", "rentals_source.json")
+OUT_META = os.path.join("data", "rentals_meta.json")
+FAISS_TEXT_PATH = os.path.join("data", "faiss_text.index")
+FAISS_IMAGE_PATH = os.path.join("data", "faiss_image.index")
+
+
+def load_rentals():
+    with open(DATA_IN, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    return data.get("rental_listings", [])
+
+
+def build_text_index(text_embs):
+    dim = text_embs.shape[1]
+    index = faiss.IndexFlatIP(dim)
+    index.add(text_embs)
+    faiss.write_index(index, FAISS_TEXT_PATH)
+    print(f"✅ Saved text index -> {FAISS_TEXT_PATH} (dim: {dim})")
+
+
+def build_image_index(image_embs):
+    dim = image_embs.shape[1]
+    index = faiss.IndexFlatIP(dim)
+    index.add(image_embs)
+    faiss.write_index(index, FAISS_IMAGE_PATH)
+    print(f"✅ Saved image index -> {FAISS_IMAGE_PATH} (dim: {dim})")
+
+
+def main():
+    print(f"📂 Loading rentals from {DATA_IN}")
+    rentals = load_rentals()
+    if not rentals:
+        raise SystemExit("❌ No rentals found in data/rentals_source.json")
+
+    # --- 1) TEXT embeddings ---
+    print("✍️ Embedding texts ...")
+    texts = [r.get("desc", "") for r in rentals]
+    text_embs = embed_text(texts)  # NxD
+    
+    # Ensure consistent shape and normalization
+    if text_embs.ndim == 1:
+        text_embs = text_embs.reshape(1, -1)
+    text_embs = text_embs / (np.linalg.norm(text_embs, axis=1, keepdims=True) + 1e-10)
+    text_embs = text_embs.astype("float32")
+    
+    print(f"Text embeddings shape: {text_embs.shape}")
+    build_text_index(text_embs)
+
+    # Save text embeddings in metadata
+    for i, emb in enumerate(text_embs):
+        rentals[i]["text_emb"] = emb.flatten().tolist()
+
+    # --- 2) IMAGE embeddings (average per rental) ---
+    print("🖼️ Embedding images ...")
+    image_embs_list = []
+    for r in tqdm(rentals, desc="images"):
+        imgs = r.get("images", [])
+        sub_embs = []
+        for url in imgs[:3]:
+            try:
+                emb = embed_image_url(url)
+                if emb is not None:
+                    emb = emb.astype("float32").flatten()
+                    emb /= (np.linalg.norm(emb) + 1e-10)
+                    sub_embs.append(emb)
+            except Exception as e:
+                print(f"Warning: Failed to embed image {url}: {e}")
+                continue
+
+        if sub_embs:
+            avg = np.mean(sub_embs, axis=0)
+            avg /= (np.linalg.norm(avg) + 1e-10)
+            image_embs_list.append(avg)
+            r["image_emb"] = avg.tolist()
+        else:
+            # Use 512 dimensions for CLIP
+            zero = np.zeros((512,), dtype="float32")
+            image_embs_list.append(zero)
+            r["image_emb"] = zero.tolist()
+
+    image_embs = np.vstack(image_embs_list).astype("float32")
+    print(f"Image embeddings shape: {image_embs.shape}")
+    build_image_index(image_embs)
+
+    # --- Save metadata ---
+    with open(OUT_META, "w", encoding="utf-8") as f:
+        json.dump(rentals, f, ensure_ascii=False, indent=2)
+    print(f"✅ Metadata saved -> {OUT_META}")
+    print("🎉 Finished building indexes.")
+
+
+if __name__ == "__main__":
+    main()
+</file>
+
+<file path="matching_engine/engine.py">
+import faiss
+import numpy as np
+import json
+import os
+from concurrent.futures import ThreadPoolExecutor
+
+from matching_engine.text_matcher import embed_text
+from matching_engine.image_matcher import embed_images_batch
+from matching_engine.structured_matcher import price_similarity_sale_to_rental, rooms_similarity, location_similarity
+
+DATA_META = os.path.join("data", "rentals_meta.json")
+FAISS_TEXT_PATH = os.path.join("data", "faiss_text.index")
+FAISS_IMAGE_PATH = os.path.join("data", "faiss_image.index")
+
+_text_index = None
+_image_index = None
+_rentals_meta = None
+
+def load_indexes():
+    global _text_index, _image_index, _rentals_meta
+    if _text_index is None:
+        _text_index = faiss.read_index(FAISS_TEXT_PATH)
+    if _image_index is None:
+        _image_index = faiss.read_index(FAISS_IMAGE_PATH)
+    if _rentals_meta is None:
+        with open(DATA_META, "r", encoding="utf-8") as f:
+            _rentals_meta = json.load(f)
+
+def search_text_topk(sale_desc, top_k=150):
+    emb = embed_text(sale_desc).astype("float32").flatten()
+    emb /= (np.linalg.norm(emb) + 1e-10)
+    D, I = _text_index.search(emb.reshape(1, -1), top_k)
+    return list(zip(I[0].tolist(), D[0].tolist()))
+
+def search_image_topk_from_urls(img_urls, top_k=150):
+    emb_list = embed_images_batch(img_urls[:3])
+    emb_list = [e for e in emb_list if e is not None]
+    if not emb_list:
+        return []
+    avg = np.mean(emb_list, axis=0)
+    avg /= (np.linalg.norm(avg) + 1e-10)
+    D, I = _image_index.search(avg.reshape(1, -1), top_k)
+    return list(zip(I[0].tolist(), D[0].tolist()))
+
+def _embed_sale(sale):
+    text_emb = embed_text(sale.get("desc", "")).astype("float32").flatten()
+    text_emb /= (np.linalg.norm(text_emb) + 1e-10)
+
+    image_embs = embed_images_batch(sale.get("images", [])[:3])
+    image_embs = [e for e in image_embs if e is not None]
+    image_avg = np.mean(image_embs, axis=0) if image_embs else None
+    if image_avg is not None:
+        image_avg /= (np.linalg.norm(image_avg) + 1e-10)
+
+    return text_emb, image_avg
+
+def compute_final_scores(sale, candidate_idxs):
+    sale_price = sale.get("price")
+    sale_rooms = sale.get("rooms")
+    sale_location = sale.get("location")
+    sale_text_emb, sale_image_avg = _embed_sale(sale)
+
+    results = []
+    for idx in candidate_idxs:
+        meta = _rentals_meta[idx]
+        rental_text_emb = np.array(meta.get("text_emb"), dtype="float32").reshape(-1)
+        rental_text_emb /= (np.linalg.norm(rental_text_emb) + 1e-10)
+        text_score = float(np.dot(sale_text_emb, rental_text_emb)) * 100.0
+
+        image_score = 0.0
+        if sale_image_avg is not None and meta.get("image_emb"):
+            rental_image_emb = np.array(meta["image_emb"], dtype="float32").reshape(-1)
+            rental_image_emb /= (np.linalg.norm(rental_image_emb) + 1e-10)
+            image_score = float(np.dot(sale_image_avg, rental_image_emb)) * 100.0
+
+        structured_score = round(
+            (price_similarity_sale_to_rental(sale_price, meta.get("price")) +
+             rooms_similarity(sale_rooms, meta.get("rooms")) +
+             location_similarity(sale_location, meta.get("location"))) / 3.0, 2
+        )
+
+        final = round(0.45 * text_score + 0.35 * image_score + 0.2 * structured_score, 2)
+
+        results.append({
+            "rental_index": idx,
+            "platform": meta.get("platform"),
+            "url": meta.get("url"),
+            "title": meta.get("title"),
+            "text_similarity": round(text_score, 2),
+            "image_similarity": round(image_score, 2),
+            "structured_similarity": structured_score,
+            "final_score": final,
+            "image": meta.get("images")[0] if meta.get("images") else "https://via.placeholder.com/400x250"
+        })
+
+    return sorted(results, key=lambda x: x["final_score"], reverse=True)
+
+def match_sale_to_rentals(sale: dict, top_k_text=120, top_k_image=120, final_candidate_limit=200):
+    load_indexes()
+    text_hits = [i for i, _ in search_text_topk(sale.get("desc", ""), top_k=top_k_text)]
+    image_hits = [i for i, _ in search_image_topk_from_urls(sale.get("images", []), top_k=top_k_image)]
+
+    seen, candidates = {}, []
+    for i in text_hits + image_hits:
+        if i not in seen and len(candidates) < final_candidate_limit:
+            seen[i] = True
+            candidates.append(i)
+    if not candidates:
+        candidates = list(range(min(200, len(_rentals_meta))))
+
+    return compute_final_scores(sale, candidates)
+
+class MatchingEngine:
+    def __init__(self):
+        load_indexes()
+
+    def match_sale_to_rentals(self, sale_listing, top_k=5):
+        results = match_sale_to_rentals(sale_listing)
+        seen_urls = set()
+        unique_results = []
+        for r in results:
+            if r["url"] not in seen_urls:
+                unique_results.append(r)
+                seen_urls.add(r["url"])
+        return unique_results[:top_k]
+</file>
+
+<file path="matching_engine/image_matcher.py">
+import os
+import json
+import hashlib
+import requests
+import numpy as np
+from PIL import Image
+from io import BytesIO
+import torch
+from sentence_transformers import SentenceTransformer
+import time
+
+IMAGE_MODEL_NAME = "clip-ViT-B-32"
+_image_model = None
+CACHE_FILE = os.path.join("data", "image_embedding_cache.json")
+
+# ---------------- Cache ----------------
+if os.path.exists(CACHE_FILE):
+    with open(CACHE_FILE, "r", encoding="utf-8") as f:
+        _cache = json.load(f)
+else:
+    _cache = {}
+
+def _get_model():
+    """Lazy load the model with GPU if available."""
+    global _image_model
+    if _image_model is None:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        print(f"🔄 Loading CLIP model on {device}...")
+        _image_model = SentenceTransformer(IMAGE_MODEL_NAME, device=device)
+        print("✅ CLIP model loaded")
+    return _image_model
+
+def _hash_url(url: str) -> str:
+    return hashlib.md5(url.encode()).hexdigest()
+
+def _save_cache():
+    with open(CACHE_FILE, "w", encoding="utf-8") as f:
+        json.dump(_cache, f)
+
+def load_image_from_url(url: str, size=(224, 224), timeout: int = 3):
+    try:
+        r = requests.get(url, timeout=timeout, stream=True)
+        r.raise_for_status()
+        content = b""
+        max_size = 5 * 1024 * 1024
+        for chunk in r.iter_content(chunk_size=8192):
+            content += chunk
+            if len(content) > max_size:
+                raise Exception("Image too large")
+        img = Image.open(BytesIO(content)).convert("RGB")
+        img.thumbnail(size, Image.Resampling.LANCZOS)
+        return img
+    except Exception as e:
+        print(f"❌ Failed to load {url[:50]}: {e}")
+        return None
+
+def embed_image_pil(pil_image):
+    try:
+        model = _get_model()
+        emb = model.encode([pil_image], convert_to_numpy=True, show_progress_bar=False, use_fast=True)
+        emb = emb.astype("float32")
+        emb /= (np.linalg.norm(emb, axis=1, keepdims=True) + 1e-10)
+        return emb[0]
+    except Exception as e:
+        print(f"❌ Failed to embed image: {e}")
+        return None
+
+def embed_image_url(url: str):
+    """Single image embedding with caching"""
+    if not url or not url.strip():
+        return None
+
+    key = _hash_url(url)
+    if key in _cache:
+        cached = _cache[key]
+        return np.array(cached, dtype="float32") if cached else None
+
+    start_time = time.time()
+    pil = load_image_from_url(url)
+    if pil is None:
+        _cache[key] = None
+        _save_cache()
+        return None
+
+    emb = embed_image_pil(pil)
+    _cache[key] = emb.tolist() if emb is not None else None
+    _save_cache()
+    print(f"⚡ Embedded {url[:30]} in {time.time()-start_time:.2f}s")
+    return emb
+
+def embed_images_batch(urls: list):
+    """Batch embedding multiple images with caching"""
+    if not urls:
+        return []
+
+    results, new_cache = [], False
+    pil_images, url_keys, pending_indices = [], [], []
+
+    for i, url in enumerate(urls):
+        if not url or not url.strip():
+            results.append(None)
+            continue
+
+        key = _hash_url(url)
+        if key in _cache:
+            cached = _cache[key]
+            results.append(np.array(cached, dtype="float32") if cached else None)
+        else:
+            img = load_image_from_url(url)
+            if img is None:
+                results.append(None)
+                _cache[key] = None
+                new_cache = True
+            else:
+                pil_images.append(img)
+                url_keys.append((url, key))
+                pending_indices.append(len(results))
+                results.append("__PENDING__")
+
+    if pil_images:
+        try:
+            model = _get_model()
+            embs = model.encode(pil_images, convert_to_numpy=True, show_progress_bar=False, use_fast=True)
+            embs = embs.astype("float32")
+            embs /= (np.linalg.norm(embs, axis=1, keepdims=True) + 1e-10)
+
+            for i, (url, key) in enumerate(url_keys):
+                results[pending_indices[i]] = embs[i]
+                _cache[key] = embs[i].tolist()
+                new_cache = True
+        except Exception as e:
+            print(f"❌ Batch embedding failed: {e}")
+            for idx in pending_indices:
+                results[idx] = None
+
+    if new_cache:
+        _save_cache()
+
+    return results
+</file>
+
+<file path="matching_engine/init.py">
+# matching_engine/__init__.py
+__all__ = [
+    "text_matcher",
+    "image_matcher",
+    "structured_matcher",
+    "engine",
+    "build_indexes"
+]
+</file>
+
+<file path="matching_engine/structured_matcher.py">
+# matching_engine/structured_matcher.py
+import math
+
+def price_similarity_sale_to_rental(sale_price, rental_price_per_night):
+    """
+    Compare sale price vs rental nightly price.
+    - Assumes target annual return = 5% of sale price.
+    - Uses 50% occupancy heuristic for rentals.
+    - Returns score in [0,100].
+    """
+    if not sale_price or not rental_price_per_night:
+        return 50.0
+
+    est_occupancy = 0.5  # average utilization
+    annual_rental = rental_price_per_night * est_occupancy * 365.0
+    target = sale_price * 0.05  # expected return (5% rule)
+
+    ratio = annual_rental / (target + 1e-9)
+    return round(max(0.0, min(100.0, ratio * 100.0)), 2)
+
+
+def rooms_similarity(r1, r2):
+    """
+    Compare number of rooms between sale & rental.
+    Exact match = 100, off by 1 = 70, off by 2 = 40, otherwise 10.
+    Neutral 50 if missing.
+    """
+    if r1 is None or r2 is None:
+        return 50.0
+
+    diff = abs(int(r1) - int(r2))
+    if diff == 0:
+        return 100.0
+    elif diff == 1:
+        return 70.0
+    elif diff == 2:
+        return 40.0
+    return 10.0
+
+
+def location_similarity(loc_sale, loc_rental):
+    """
+    Compare location of sale vs rental.
+    - If lat/lon given: use haversine distance.
+      <= 5 km → 100
+      <= 50 km → 60
+      otherwise → 20
+    - If only strings: exact match = 100, else 40.
+    - Neutral 50 if missing.
+    """
+    if not loc_sale or not loc_rental:
+        return 50.0
+
+    # Case 1: latitude/longitude tuples
+    if isinstance(loc_sale, (list, tuple)) and isinstance(loc_rental, (list, tuple)):
+        try:
+            lat1, lon1 = map(float, loc_sale)
+            lat2, lon2 = map(float, loc_rental)
+
+            # haversine formula
+            R = 6371.0
+            dphi = math.radians(lat2 - lat1)
+            dlambda = math.radians(lon2 - lon1)
+            a = (math.sin(dphi / 2) ** 2 +
+                 math.cos(math.radians(lat1)) *
+                 math.cos(math.radians(lat2)) *
+                 math.sin(dlambda / 2) ** 2)
+            dist_km = R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+            if dist_km <= 5:
+                return 100.0
+            elif dist_km <= 50:
+                return 60.0
+            return 20.0
+        except Exception:
+            return 50.0  # fallback neutral if bad data
+
+    # Case 2: string comparison
+    return 100.0 if str(loc_sale).strip().lower() == str(loc_rental).strip().lower() else 40.0
+</file>
+
+<file path="matching_engine/text_matcher.py">
+# matching_engine/text_matcher.py
+import os
+import json
+import hashlib
+import numpy as np
+from sentence_transformers import SentenceTransformer
+
+TEXT_MODEL_NAME = "all-MiniLM-L6-v2"
+_text_model = SentenceTransformer(TEXT_MODEL_NAME)
+
+CACHE_FILE = os.path.join("data", "text_embedding_cache.json")
+
+# ---------------- Cache ----------------
+if os.path.exists(CACHE_FILE):
+    with open(CACHE_FILE, "r", encoding="utf-8") as f:
+        _cache = json.load(f)
+else:
+    _cache = {}
+
+def _hash_text(text: str) -> str:
+    """Create stable hash key for caching embeddings of text."""
+    return hashlib.md5(text.strip().lower().encode()).hexdigest()
+
+def _save_cache():
+    with open(CACHE_FILE, "w", encoding="utf-8") as f:
+        json.dump(_cache, f)
+
+# ---------------- Embedding ----------------
+def embed_text(texts):
+    """
+    Accepts a single string or list of strings.
+    Returns: np.ndarray(float32)
+        - If single string -> (D,) vector
+        - If list of strings -> (N,D) matrix
+    Cached automatically.
+    """
+    single = False
+    if isinstance(texts, str):
+        texts = [texts]
+        single = True
+
+    results, to_embed, to_keys = [], [], []
+
+    # check cache
+    for t in texts:
+        key = _hash_text(t)
+        if key in _cache:
+            results.append(np.array(_cache[key], dtype="float32"))
+        else:
+            results.append("__PENDING__")
+            to_embed.append(t)
+            to_keys.append((t, key))
+
+    # embed missing
+    if to_embed:
+        embs = _text_model.encode(to_embed, convert_to_numpy=True, show_progress_bar=False)
+        embs = embs.astype("float32")
+        embs = embs / (np.linalg.norm(embs, axis=1, keepdims=True) + 1e-10)
+
+        for i, (txt, key) in enumerate(to_keys):
+            vec = embs[i]
+            _cache[key] = vec.tolist()
+            # replace "__PENDING__" safely
+            for j, r in enumerate(results):
+                if isinstance(r, str) and r == "__PENDING__":
+                    results[j] = vec
+                    break  # replace only the first pending per iteration
+
+        _save_cache()
+
+    # stack results
+    if single:
+        return results[0]
+    return np.vstack(results)
+
+
+# ---------------- Helpers ----------------
+def normalize_vector(v):
+    v = v.astype("float32")
+    norm = np.linalg.norm(v, axis=-1, keepdims=True) + 1e-10
+    return v / norm
+
+def cosine_sim(a, b):
+    """Cosine similarity between two 1D numpy arrays."""
+    a = normalize_vector(a)
+    b = normalize_vector(b)
+    return float(np.dot(a, b))
+</file>
+
+<file path="precompute_rental_images.py">
+import json
+import os
+from tqdm import tqdm
+import numpy as np
+from matching_engine.image_matcher import embed_image_url
+
+DATA_IN = os.path.join("data", "rentals_source.json")
+OUT_META = os.path.join("data", "rentals_meta.json")
+
+
+def main():
+    print(f"📂 Loading rentals from {DATA_IN}")
+    with open(DATA_IN, "r", encoding="utf-8") as f:
+        rentals = json.load(f).get("rental_listings", [])
+
+    print("🖼️ Embedding images ...")
+    for r in tqdm(rentals, desc="images"):
+        imgs = r.get("images", [])
+        sub_embs = []
+        for url in imgs[:3]:
+            try:
+                emb = embed_image_url(url)
+                if emb is not None:
+                    emb = emb.astype("float32").flatten()
+                    emb /= (np.linalg.norm(emb) + 1e-10)
+                    sub_embs.append(emb)
+            except Exception:
+                continue
+
+        if sub_embs:
+            avg = np.mean(sub_embs, axis=0)
+            avg /= (np.linalg.norm(avg) + 1e-10)
+            r["image_emb"] = avg.tolist()
+        else:
+            zero = np.zeros((512,), dtype="float32")
+            r["image_emb"] = zero.tolist()
+
+    with open(OUT_META, "w", encoding="utf-8") as f:
+        json.dump(rentals, f, ensure_ascii=False, indent=2)
+    print(f"✅ Rental image embeddings precomputed and saved -> {OUT_META}")
+
+
+if __name__ == "__main__":
+    main()
+</file>
+
+<file path="README.md">
+# Real Estate Sale vs Rental Matching Engine 🏡
+
+## 📌 Overview
+
+This project is an AI-powered matching engine that compares **properties for sale** with **rental listings**.  
+It uses:
+
+- **Text similarity** (titles, descriptions, location)
+- **Image similarity** (property photos)
+- **Structured similarity** (price, rooms, location)
+
+The goal: Given a **property-for-sale URL**, return the **most similar rental listings**.
+
+---
+
+## ⚙️ Tech Stack
+
+- **Python 3.10+**
+- **FastAPI** (for API)
+- **Sentence-Transformers** (for text embeddings, free models)
+- **CLIP** (for image embeddings, free model)
+- **FAISS** (for fast similarity search)
+- **Docker** (for deployment)
+
+---
+
+## 📂 Project Structure
+
+real_estate_ai/
+│── matching_engine/
+│ │── text_matcher.py
+│ │── image_matcher.py
+│ │── structured_matcher.py
+│ │── engine.py
+│
+│── rentals_source/
+│ │── data_loader.py
+│ │── sample_rentals.json
+│
+│── api/
+│ │── main.py
+│
+│── tests/
+│ │── test_engine.py
+│
+│── requirements.txt
+│── Dockerfile
+│── README.md
+
+yaml
+Copy code
+
+---
+
+## 🚀 How to Run Locally
+
+1. **Create venv & install dependencies**
+
+   ```bash
+   python -m venv venv
+   source venv/bin/activate   # (Linux/Mac)
+   venv\Scripts\activate      # (Windows)
+
+   pip install -r requirements.txt
+   Run API
+   ```
+
+bash
+Copy code
+uvicorn api.main:app --reload
+Open in browser:
+
+arduino
+Copy code
+http://127.0.0.1:8000/docs
+🐳 Run with Docker
+Build image:
+
+bash
+Copy code
+docker build -t real_estate_ai .
+Run container:
+
+bash
+Copy code
+docker run -p 8000:8000 real_estate_ai
+API available at:
+
+bash
+Copy code
+http://localhost:8000/match
+📡 Example API Call
+Request
+json
+Copy code
+POST /match
+{
+"sale_url": "https://example.com/property-for-sale/123"
+}
+Response
+json
+Copy code
+{
+"sale_property": {
+"title": "Luxury Villa",
+"price": 500000,
+"rooms": 4,
+"location": "Florence, Italy"
+},
+"matches": [
+{
+"rental_url": "https://airbnb.com/house/456",
+"score": 0.87,
+"price": 250,
+"location": "Florence, Italy"
+},
+{
+"rental_url": "https://vrbo.com/villa/789",
+"score": 0.81,
+"price": 300,
+"location": "Florence, Italy"
+}
+]
+}
+✅ Tests
+Run unit tests:
+
+bash
+Copy code
+pytest tests/
+👨‍💻 Integration Notes for Team
+🔹 Backend Developers
+Call the API endpoint: POST /match with JSON body containing sale_url.
+
+The AI engine will:
+
+Extract property details (title, price, rooms, location, images).
+
+Compare with available rentals.
+
+Return top N rental matches with similarity scores.
+
+You just need to forward results to frontend in the desired format.
+
+If you want to extend rental sources:
+
+Add more rentals in rentals_source/sample_rentals.json.
+
+Or connect to live scrapers / databases.
+
+🔹 Frontend Developers
+Send a POST request when the user enters a property URL in the frontend form.
+
+Example (JS fetch):
+
+javascript
+Copy code
+fetch("http://localhost:8000/match", {
+method: "POST",
+headers: { "Content-Type": "application/json" },
+body: JSON.stringify({ sale_url: userInputURL })
+})
+.then(res => res.json())
+.then(data => {
+// Display results
+console.log(data.matches);
+});
+Display returned matches as cards:
+
+Rental image
+
+Rental URL (clickable)
+
+Price per night
+
+Similarity score (or "Match %")
+
+Ensure frontend can handle response within 2–3 seconds.
+
+📝 Notes
+All models are free & open-source.
+
+Expected response time: 2–3 seconds per query.
+
+Can be scaled with Docker + cloud deployment.
+
+Team members should use this repo as a black-box service:
+
+Input = sale_url
+
+Output = structured JSON with best rentals
+</file>
+
+<file path="test_input.json">
+{
+  "id": 1,
+  "url": "https://example.com/sale/1",
+  "title": "Luxury Villa in Tuscany",
+  "desc": "A beautiful villa in Florence with swimming pool and garden.",
+  "price": 2500000,
+  "rooms": 5,
+  "location": "Florence, Italy",
+  "images": [
+    "https://picsum.photos/200/300?random=1",
+    "https://picsum.photos/200/300?random=2"
+  ]
+}
+</file>
+
+<file path="tests/test_api.py">
+# tests/test_api.py
+import os
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+from fastapi.testclient import TestClient
+from api.main import app
+from matching_engine.build_indexes import main as build_indexes_main
+
+client = TestClient(app)
+
+def test_match_endpoint():
+    # ensure indexes exist
+    build_indexes_main()
+
+    sale = {
+        "title": "3-bedroom Tuscan Villa",
+        "desc": "Charming villa with pool in Tuscany and vineyard view.",
+        "images": ["https://picsum.photos/seed/202/800/600"],
+        "price": 1000000,
+        "rooms": 3,
+        "location": "Tuscany, Italy"
+    }
+
+    resp = client.post("/match", json={"sale": sale})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "matches" in data
+    assert isinstance(data["matches"], list)
+    print("API top result:", data["matches"][0])
+
+if __name__ == "__main__":
+    test_match_endpoint()
+</file>
+
+<file path="tests/test_engine.py">
+import os
+import sys
+
+# Ensure root import
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+from matching_engine.build_indexes import main as build_indexes_main
+from matching_engine.engine import match_sale_to_rentals
+
+# Paths for cached indexes
+DATA_META = os.path.join("data", "rentals_meta.json")
+FAISS_TEXT_PATH = os.path.join("data", "faiss_text.index")
+FAISS_IMAGE_PATH = os.path.join("data", "faiss_image.index")
+
+
+def test_build_and_match():
+    # Step 1: Build indexes only if missing
+    if not (os.path.exists(DATA_META) and os.path.exists(FAISS_TEXT_PATH) and os.path.exists(FAISS_IMAGE_PATH)):
+        print("⚙️ Indexes not found, building them ...")
+        build_indexes_main()
+    else:
+        print("✅ Using cached indexes")
+
+    # Step 2: Example sale property
+    sale = {
+        "title": "Lovely 3-bedroom Tuscan villa with pool and garden",
+        "desc": "Charming 3-bedroom villa with private pool near vineyards in Tuscany.",
+        "images": ["https://picsum.photos/seed/201/800/600"],
+        "price": 950000,
+        "rooms": 3,
+        "location": "Tuscany, Italy",
+    }
+
+    # Step 3: Run search
+    results = match_sale_to_rentals(sale, top_k_text=20, top_k_image=20, final_candidate_limit=30)
+    assert isinstance(results, list) and len(results) > 0
+    print("🏆 Top result:", results[0])
+
+
+if __name__ == "__main__":
+    test_build_and_match()
+</file>
+
+</files>

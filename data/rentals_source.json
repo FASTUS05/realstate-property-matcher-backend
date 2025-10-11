@@ -1,0 +1,47 @@
+{
+  "sale_listings": [
+    {
+      "id": 1,
+      "url": "https://example.com/sale/1",
+      "title": "Luxury Villa in Tuscany",
+      "desc": "A beautiful villa in Florence with swimming pool and garden.",
+      "price": 2500000,
+      "rooms": 5,
+      "location": "Florence, Italy",
+      "images": [
+        "https://picsum.photos/200/300?random=1",
+        "https://picsum.photos/200/300?random=2"
+      ]
+    }
+  ],
+  "rental_listings": [
+    {
+      "id": 101,
+      "url": "https://example.com/rent/1",
+      "platform": "Airbnb",
+      "title": "Holiday Villa in Florence",
+      "desc": "Spacious rental villa with garden and pool in Florence.",
+      "price": 5000,
+      "rooms": 5,
+      "location": "Florence, Italy",
+      "images": [
+        "https://picsum.photos/200/300?random=3",
+        "https://picsum.photos/200/300?random=4"
+      ]
+    },
+    {
+      "id": 102,
+      "url": "https://example.com/rent/2",
+      "platform": "Booking",
+      "title": "Charming Tuscany House",
+      "desc": "Tuscan-style house with hills view and 4 rooms.",
+      "price": 4000,
+      "rooms": 4,
+      "location": "Tuscany, Italy",
+      "images": [
+        "https://picsum.photos/200/300?random=5",
+        "https://picsum.photos/200/300?random=6"
+      ]
+    }
+  ]
+}
