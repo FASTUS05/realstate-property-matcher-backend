@@ -448,7 +448,7 @@ app = Flask(__name__)
 # CORS(app, resources={r"/*": {"origins": "http://localhost:5173"}})
 
 # Add proper CORS configuration with all needed origins
-CORS(app, resources={r"/*": {"origins": ["http://localhost:5173", "http://localhost:3000", "https://realstate-backend-production.up.railway.app"]}})
+CORS(app, resources={r"/*": {"origins": ["http://localhost:5173", "http://localhost:3000","https://fastushomes.com", "https://realstate-backend-production.up.railway.app"]}})
 
 
 # URL of your FastAPI backend
