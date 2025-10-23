@@ -18,3 +18,4 @@ playwright
 playwright-stealth
 motor
 passlib[bcrypt]
+email-validator
